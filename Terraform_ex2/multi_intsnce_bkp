@@ -1,0 +1,76 @@
+
+
+# Configure Terraform Backend for State Management in S3
+terraform {
+  backend "s3" {
+    bucket = "terraform-state-bucket-563184259844"
+    key    = "ex_terraform.tfstate"
+    region = "ap-south-2"
+  }
+}
+
+locals {
+  instances = {
+    web = { name = "Web" }
+    app = { name = "App" }
+    db  = { name = "DB" }
+  }
+}
+
+# Attach an existing IAM instance profile (which already references the desired role)
+data "aws_iam_instance_profile" "existing" {
+  name = var.instance_profile_name
+}
+
+# Security group for all instances
+resource "aws_security_group" "instance_sg" {
+  name        = "instance-sg"
+  description = "Allow SSH and HTTP access"
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "instance-security-group"
+  }
+}
+
+# three EC2 instances (web, app, db) created with for_each
+resource "aws_instance" "instances" {
+  for_each = local.instances
+
+  ami                    = var.ami
+  instance_type          = var.instance_type
+  key_name               = "Nithish-first"
+  iam_instance_profile   = data.aws_iam_instance_profile.existing.name
+  vpc_security_group_ids = [aws_security_group.instance_sg.id]
+
+  tags = {
+    Name         = each.value.name
+    environment  = "Dev"
+    Project_Name = "Terraform_Examples"
+    Role         = each.key
+  }
+}
+
+  
